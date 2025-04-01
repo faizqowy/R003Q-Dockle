@@ -1,6 +1,9 @@
+using Dockle.Services; 
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
+builder.Services.AddSingleton<FileProcessingService>();
 
 var app = builder.Build();
 
