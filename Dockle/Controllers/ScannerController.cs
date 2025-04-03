@@ -89,6 +89,8 @@ public class ScannerController : Controller
                 _logger.LogInformation(optimization);
             }
 
+            _fileProcessingService.OptimizeDockerfiles(extractedPath);
+
             return Ok(new { message = "File uploaded and analyzed successfully.", Dockerfile = smellResults, Dockercompose = optimizationResults });
         }
         catch (Exception ex)

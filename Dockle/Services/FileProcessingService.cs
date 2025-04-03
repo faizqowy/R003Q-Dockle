@@ -149,4 +149,66 @@ public class FileProcessingService{
 
         return optimizations;
     }
+
+    public void OptimizeDockerfiles(string extractedPath){
+        string rootDockerfilePath = Path.Combine(extractedPath, "dockerfile");
+        if (File.Exists(rootDockerfilePath)){
+            _logger.LogInformation($"Optimizing root-level Dockerfile: {rootDockerfilePath}");
+            OptimizeDockerfile(rootDockerfilePath);
+        }
+    
+        var folders = Directory.GetDirectories(extractedPath);
+        foreach (var folder in folders){
+            var dockerfilePath = Path.Combine(folder, "dockerfile");
+            if (File.Exists(dockerfilePath)){
+                _logger.LogInformation($"Optimizing Dockerfile: {dockerfilePath}");
+                OptimizeDockerfile(dockerfilePath);
+            }
+        }
+    }
+    
+    private void OptimizeDockerfile(string dockerfilePath){
+        var backupPath = dockerfilePath + ".bak";
+        File.Copy(dockerfilePath, backupPath, true);
+        _logger.LogInformation($"Backup created: {backupPath}");
+
+        var lines = File.ReadAllLines(dockerfilePath).ToList();
+        var updatedLines = new List<string>();
+        string? fromLine = null;
+        string workdirLine = "WORKDIR /app";
+        string? userLine = null;
+        string runLine = "";
+        string copyLine = "COPY . .";
+        string? exposeLine = null;
+        string healthcheckLine = "HEALTHCHECK CMD curl --fail http://localhost || exit 1";
+        string? cmdLine = null;
+
+        foreach (var line in lines){
+            if (line.StartsWith("FROM") && line.Contains(":latest")){
+                fromLine = line.Replace(":latest", ":stable");
+                _logger.LogInformation("Updated FROM instruction to avoid 'latest' tag.");
+            } else if (line.StartsWith("USER root")){
+                userLine = "USER appuser";
+                _logger.LogInformation("Replaced 'USER root' with a non-root user.");
+            } else if (line.Trim().StartsWith("RUN")){
+                runLine += (runLine == "" ? line.Replace("RUN", "").Trim() : " && " + line.Replace("RUN", "").Trim());
+            } else if (line.StartsWith("EXPOSE")){
+                exposeLine = line;
+            } else if (line.StartsWith("CMD")){
+                cmdLine = line;
+            }
+        }
+
+        if (fromLine != null) updatedLines.Add(fromLine);
+        if (userLine != null) updatedLines.Add(userLine);
+        if (!string.IsNullOrEmpty(runLine)) updatedLines.Add("RUN " + runLine);
+        updatedLines.Add(workdirLine);
+        updatedLines.Add(copyLine);
+        if (exposeLine != null) updatedLines.Add(exposeLine);
+        updatedLines.Add(healthcheckLine);
+        if (cmdLine != null) updatedLines.Add(cmdLine);
+
+        File.WriteAllLines(dockerfilePath, updatedLines);
+        _logger.LogInformation("Dockerfile optimization complete.");
+    }
 }
