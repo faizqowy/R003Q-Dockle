@@ -175,35 +175,43 @@ public class FileProcessingService{
         var lines = File.ReadAllLines(dockerfilePath).ToList();
         var updatedLines = new List<string>();
         string? fromLine = null;
-        string workdirLine = "WORKDIR /app";
-        string? userLine = null;
-        string runLine = "";
-        string copyLine = "COPY . .";
+        string? userSetup = null;
+        string userLine = "USER appuser";
+        string runPackages = "";
+        string? workdirLine = null;
+        string? copyLine = null;
         string? exposeLine = null;
-        string healthcheckLine = "HEALTHCHECK CMD curl --fail http://localhost || exit 1";
+        string healthcheckLine = "HEALTHCHECK --interval=30s --timeout=10s \\\n  CMD curl -f http://localhost:3000 || exit 1";
         string? cmdLine = null;
 
         foreach (var line in lines){
-            if (line.StartsWith("FROM") && line.Contains(":latest")){
+            if (line.StartsWith("FROM")){
                 fromLine = line.Replace(":latest", ":stable");
-                _logger.LogInformation("Updated FROM instruction to avoid 'latest' tag.");
-            } else if (line.StartsWith("USER root")){
-                userLine = "USER appuser";
-                _logger.LogInformation("Replaced 'USER root' with a non-root user.");
-            } else if (line.Trim().StartsWith("RUN")){
-                runLine += (runLine == "" ? line.Replace("RUN", "").Trim() : " && " + line.Replace("RUN", "").Trim());
+            } else if (line.StartsWith("RUN addgroup")){
+                userSetup = line;
+            } else if (line.Trim().StartsWith("RUN") && !line.Contains("addgroup")){
+                runPackages += (runPackages == "" ? line.Replace("RUN", "").Trim() : " && " + line.Replace("RUN", "").Trim());
+            } else if (line.StartsWith("WORKDIR")){
+                workdirLine = line;
+            } else if (line.StartsWith("COPY . /app") || line.StartsWith("COPY ")){
+                copyLine = line;
+            } else if (line.StartsWith("ADD") && !line.Contains("tar.gz")){
+                copyLine = line.Replace("ADD", "COPY");
             } else if (line.StartsWith("EXPOSE")){
                 exposeLine = line;
+            } else if (line.StartsWith("HEALTHCHECK")){
+                healthcheckLine = line;
             } else if (line.StartsWith("CMD")){
                 cmdLine = line;
             }
         }
 
         if (fromLine != null) updatedLines.Add(fromLine);
-        if (userLine != null) updatedLines.Add(userLine);
-        if (!string.IsNullOrEmpty(runLine)) updatedLines.Add("RUN " + runLine);
-        updatedLines.Add(workdirLine);
-        updatedLines.Add(copyLine);
+        if (userSetup != null) updatedLines.Add(userSetup);
+        updatedLines.Add(userLine);
+        if (!string.IsNullOrEmpty(runPackages)) updatedLines.Add("RUN " + runPackages);
+        if (workdirLine != null) updatedLines.Add(workdirLine);
+        if (copyLine != null) updatedLines.Add(copyLine);
         if (exposeLine != null) updatedLines.Add(exposeLine);
         updatedLines.Add(healthcheckLine);
         if (cmdLine != null) updatedLines.Add(cmdLine);
