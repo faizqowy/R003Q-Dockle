@@ -1,5 +1,7 @@
 .vscode
 
+.gitignore
+
 /Dockle/bin/
 /Dockle/obj/
 
@@ -24,3 +26,5 @@
 !Dockle/wwwroot/images/
 !Dockle/wwwroot/raw-css/
 !Dockle/wwwroot/raw-js/
+
+/big_dummy_data/

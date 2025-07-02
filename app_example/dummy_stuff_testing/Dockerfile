@@ -1,26 +1,23 @@
-# ❌ Using 'latest' tag (bad practice)
-FROM node:latest  
+# 1️⃣ Using `latest` instead of a specific version
+FROM python:latest  
 
-# ❌ Using root user (security risk)
-USER root  
+# 2️⃣ Running as root (bad practice)
+USER root
 
-# ❌ Too many RUN commands (should be combined)
-RUN apt-get update  
-RUN apt-get install -y curl  
-RUN apt-get install -y git  
-RUN apt-get install -y vim  
-RUN apt-get install -y unzip  
+# 3️⃣ No WORKDIR before running commands
+RUN apt-get update
+RUN apt-get install -y python3 python3-pip
 
-# ❌ Using ADD instead of COPY (unless extracting archives)
-ADD myapp.tar.gz /app/  
+# 4️⃣ Multiple `RUN` commands (should be combined)
+RUN pip install flask
+RUN pip install requests
+RUN pip install numpy
 
-# ❌ No HEALTHCHECK (recommended for production images)
-WORKDIR /app  
-COPY . .  
-RUN npm install  
+# 5️⃣ Using `ADD` instead of `COPY` (bad for single files)
+ADD app.py /app/app.py  
 
-# ❌ Exposing too many ports (potential security issue)
-EXPOSE 3000  
-EXPOSE 8080  
+# 6️⃣ Exposing port but missing HEALTHCHECK
+EXPOSE 5000
 
-CMD ["node", "server.js"]
+# 7️⃣ Running app without a non-root user
+CMD ["python3", "/app/app.py"]
