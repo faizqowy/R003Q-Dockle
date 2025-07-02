@@ -167,56 +167,90 @@ public class FileProcessingService{
         }
     }
     
-    private void OptimizeDockerfile(string dockerfilePath){
+    private void OptimizeDockerfile(string dockerfilePath) {
         var backupPath = dockerfilePath + ".bak";
         File.Copy(dockerfilePath, backupPath, true);
         _logger.LogInformation($"Backup created: {backupPath}");
 
         var lines = File.ReadAllLines(dockerfilePath).ToList();
         var updatedLines = new List<string>();
+
         string? fromLine = null;
         string? userSetup = null;
-        string userLine = "USER appuser";
-        string runPackages = "";
         string? workdirLine = null;
         string? copyLine = null;
         string? exposeLine = null;
         string healthcheckLine = "HEALTHCHECK --interval=30s --timeout=10s \\\n  CMD curl -f http://localhost:3000 || exit 1";
         string? cmdLine = null;
+        bool hasUserLine = false;
+        bool isInRunBlock = false;
+        string runPackages = "";
 
-        foreach (var line in lines){
-            if (line.StartsWith("FROM")){
+        foreach (var line in lines) {
+            if (line.StartsWith("FROM")) {
+                if (isInRunBlock) {
+                    updatedLines.Add("RUN " + runPackages);
+                    isInRunBlock = false;
+                    runPackages = "";
+                }
                 fromLine = line.Replace(":latest", ":stable");
-            } else if (line.StartsWith("RUN addgroup")){
+                updatedLines.Add(fromLine);
+            }
+            else if (line.StartsWith("USER")) {
+                hasUserLine = true;
+                updatedLines.Add(line);
+            }
+            else if (line.StartsWith("RUN addgroup")) {
                 userSetup = line;
-            } else if (line.Trim().StartsWith("RUN") && !line.Contains("addgroup")){
-                runPackages += (runPackages == "" ? line.Replace("RUN", "").Trim() : " && " + line.Replace("RUN", "").Trim());
-            } else if (line.StartsWith("WORKDIR")){
-                workdirLine = line;
-            } else if (line.StartsWith("COPY . /app") || line.StartsWith("COPY ")){
-                copyLine = line;
-            } else if (line.StartsWith("ADD") && !line.Contains("tar.gz")){
-                copyLine = line.Replace("ADD", "COPY");
-            } else if (line.StartsWith("EXPOSE")){
-                exposeLine = line;
-            } else if (line.StartsWith("HEALTHCHECK")){
-                healthcheckLine = line;
-            } else if (line.StartsWith("CMD")){
-                cmdLine = line;
+                updatedLines.Add(userSetup);
+            }
+            else if (line.StartsWith("RUN") && !line.Contains("addgroup")) {
+                if (line.Contains("\\") || line.Contains("&&")) {
+                    if (isInRunBlock) {
+                        updatedLines.Add("RUN " + runPackages);
+                        isInRunBlock = false;
+                        runPackages = "";
+                    }
+                    updatedLines.Add(line);
+                }
+                else {
+                    if (isInRunBlock) {
+                        runPackages += " && " + line.Replace("RUN", "").Trim();
+                    }
+                    else {
+                        runPackages = line.Replace("RUN", "").Trim();
+                        isInRunBlock = true;
+                    }
+                }
+            }
+            else {
+                if (isInRunBlock) {
+                    updatedLines.Add("RUN " + runPackages);
+                    isInRunBlock = false;
+                    runPackages = "";
+                }
+
+                if (line.StartsWith("WORKDIR")) workdirLine = line;
+                if (line.StartsWith("COPY") || line.StartsWith("ADD")) copyLine = line;
+                if (line.StartsWith("EXPOSE")) exposeLine = line;
+                if (line.StartsWith("HEALTHCHECK")) healthcheckLine = line;
+                if (line.StartsWith("CMD")) cmdLine = line;
+
+                updatedLines.Add(line);
             }
         }
 
-        if (fromLine != null) updatedLines.Add(fromLine);
-        if (userSetup != null) updatedLines.Add(userSetup);
-        updatedLines.Add(userLine);
-        if (!string.IsNullOrEmpty(runPackages)) updatedLines.Add("RUN " + runPackages);
-        if (workdirLine != null) updatedLines.Add(workdirLine);
-        if (copyLine != null) updatedLines.Add(copyLine);
-        if (exposeLine != null) updatedLines.Add(exposeLine);
-        updatedLines.Add(healthcheckLine);
-        if (cmdLine != null) updatedLines.Add(cmdLine);
+        if (isInRunBlock) {
+            updatedLines.Add("RUN " + runPackages);
+        }
+
+        // Add USER appuser if it's missing
+        if (!hasUserLine) {
+            updatedLines.Insert(1, "USER appuser"); // Insert after FROM
+        }
 
         File.WriteAllLines(dockerfilePath, updatedLines);
         _logger.LogInformation("Dockerfile optimization complete.");
     }
+
 }
