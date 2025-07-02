@@ -84,14 +84,36 @@ class DockerSmellEgglogAnalyzer:
         finally:
             shutil.rmtree(temp_dir)
 
+    def analyze_single_dockerfile(self, path: str):
+        print(f"📄 Analyzing Dockerfile: {path}")
+        self.analyze_dockerfile(path)
+        self.program.run()
+        results = self.program.query('smell(x)')
+        return [res[0] for res in results]
+
 
 def main():
     parser = argparse.ArgumentParser(description="Egglog-based Docker Smell Analyzer")
-    parser.add_argument("--zip", required=True, help="Path to the project ZIP file")
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--zip", help="Path to the project ZIP file")
+    group.add_argument("--dockerfile", help="Path to a single Dockerfile")
+    group.add_argument("--compose", help="(Not yet supported) Path to docker-compose.yml file")
+
     args = parser.parse_args()
 
     analyzer = DockerSmellEgglogAnalyzer()
-    smells = analyzer.analyze_project_zip(args.zip)
+
+    if args.zip:
+        smells = analyzer.analyze_project_zip(args.zip)
+    elif args.dockerfile:
+        smells = analyzer.analyze_single_dockerfile(args.dockerfile)
+    elif args.compose:
+        print("🚧 Support for analyzing docker-compose.yml is not implemented yet.")
+        return
+    else:
+        print("❌ No valid input source provided.")
+        return
 
     print("\n=== Docker Smell Report ===")
     if smells:
