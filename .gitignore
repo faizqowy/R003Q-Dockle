@@ -28,3 +28,5 @@
 !Dockle/wwwroot/raw-js/
 
 /big_dummy_data/
+
+/Dockle-tools-raw/__pycache__/

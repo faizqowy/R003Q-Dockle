@@ -1,1 +1,1 @@
-egglog
+egglog==11.0.0
